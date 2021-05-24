@@ -24,7 +24,7 @@ ContentDropTask=${ShellDir}/drop_task
 SendCount=${ShellDir}/send_count
 isTermux=${ANDROID_RUNTIME_ROOT}${ANDROID_ROOT}
 ScriptsURL=git@gitee.com:lxk0301/jd_scripts
-ScriptsURL2=https://github.com/Zero-S1/xmly_speed
+## ScriptsURL2=https://github.com/Zero-S1/xmly_speed
 ScriptsURL3=https://github.com/kangwenhang/jd_docker2
 ShellURL=https://github.com/dockere/jd-base
 
@@ -383,7 +383,7 @@ if [ ${ExitStatusShell} -eq 0 ]; then
   [ -f ${ScriptsDir}/package.json ] && PackageListOld=$(cat ${ScriptsDir}/package.json)
   [ -f ${ScriptsDir3}/package.json ] && PackageListOld3=$(cat ${ScriptsDir3}/package.json)
   [ -d ${ScriptsDir}/.git ] && Git_PullScripts || Git_CloneScripts
-  [ -d ${ScriptsDir2}/.git ] && Git_PullScripts2 || Git_CloneScripts2
+ # [ -d ${ScriptsDir2}/.git ] && Git_PullScripts2 || Git_CloneScripts2
   [ -d ${ScriptsDir3}/.git ] && Git_PullScripts3 || Git_CloneScripts3
 fi
 
