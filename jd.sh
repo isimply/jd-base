@@ -10,6 +10,7 @@ FileConfSample=${ShellDir}/sample/config.sh.sample
 LogDir=${ShellDir}/log
 ListScripts=($(cd ${ScriptsDir}; ls *.js | grep -E "j[drx]_"))
 ListCron=${ConfigDir}/crontab.list
+PanelDir="${JD_DIR}/panel"
 
 ## 导入config.sh
 function Import_Conf {
@@ -161,10 +162,13 @@ function Random_Delay {
 ## 使用说明
 function Help {
   echo -e "本脚本的用法为："
-  echo -e "1. bash ${HelpJd} xxx      # 如果设置了随机延迟并且当时时间不在0-2、30-31、59分内，将随机延迟一定秒数"
-  echo -e "2. bash ${HelpJd} xxx now  # 无论是否设置了随机延迟，均立即运行"
-  echo -e "3. bash ${HelpJd} hangup   # 重启挂机程序"
-  echo -e "4. bash ${HelpJd} resetpwd # 重置控制面板用户名和密码"
+  echo -e "1. bash ${HelpJd} xxx         # 如果设置了随机延迟并且当时时间不在0-2、30-31、59分内，将随机延迟一定秒数"
+  echo -e "2. bash ${HelpJd} xxx now     # 无论是否设置了随机延迟，均立即运行"
+  echo -e "3. bash ${HelpJd} hangup      # 重启挂机程序"
+  echo -e "4. bash ${HelpJd} panelinfo   # 查看面板状态"
+  echo -e "5. bash ${HelpJd} panelon     # 更新面板并开启"
+  echo -e "6. bash ${HelpJd} paneloff    # 关闭面板"
+  echo -e "7. bash ${HelpJd} resetpwd    # 重置控制面板用户名和密码"
   echo -e "\n针对用法1、用法2中的\"xxx\"，无需输入后缀\".js\"，另外，如果前缀是\"jd_\"的话前缀也可以省略。"
   echo -e "当前有以下脚本可以运行（仅列出以jd_、jr_、jx_开头的脚本）："
   cd ${ScriptsDir}
@@ -203,7 +207,7 @@ function Run_Pm2 {
 
 ## 运行挂机脚本
 function Run_HangUp {
-  Import_Conf $1 && Detect_Cron && Set_Env
+  Import_Conf && Detect_Cron && Set_Env
   HangUpJs="jd_crazy_joy_coin"
   cd ${ScriptsDir}
   if type pm2 >/dev/null 2>&1; then
@@ -211,6 +215,73 @@ function Run_HangUp {
   else
     Run_Nohup >/dev/null 2>&1
   fi
+}
+
+## npm install 子程序，判断是否为安卓的Termux环境，判断是否安装有yarn
+function Npm_InstallSub() {
+  if [ -n "${isTermux}" ]; then
+    npm install --no-bin-links || npm install --no-bin-links --registry=https://registry.npm.taobao.org
+  elif ! type yarn >/dev/null 2>&1; then
+    npm install || npm install --registry=https://registry.npm.taobao.org
+  else
+    echo -e "检测到本机安装了 yarn，使用 yarn 替代 npm...\n"
+    yarn install || yarn install --registry=https://registry.npm.taobao.org
+  fi
+}
+
+## panel 面板检测更新并开启
+function PanelOn() {
+  if [ ! -d "${PanelDir}"/node_modules ]; then
+    echo -e "运行 npm install...\n"
+    if ! Npm_InstallSub; then
+      echo -e "\nnpm install 运行不成功，自动删除 ${ScriptsDir}/node_modules 后再次尝试一遍..."
+      rm -rf "${PanelDir}"/node_modules
+    fi
+  fi
+
+  [ -f "${PanelDir}"/package.json ] && PackageListOld=$(cat "${PanelDir}"/package.json)
+  cd "${PanelDir}" || exit
+  if [[ "${PackageListOld}" != "$(cat package.json)" ]]; then
+    echo -e "检测到package.json有变化，运行 npm install...\n"
+    if ! Npm_InstallSub; then
+      echo -e "\nnpm install 运行不成功，自动删除 ${ScriptsDir}/node_modules 后再次尝试一遍..."
+      rm -rf "${PanelDir}"/node_modules
+    fi
+    echo
+  fi
+
+  if [ ! -f "${ConfigDir}/auth.json" ]; then
+    cp -f "${ShellDir}"/sample/auth.json "${ConfigDir}"/auth.json
+    echo -e "检测到未设置密码，用户名：admin，密码：adminadmin\n"
+  fi
+  if [ ! -x "$(command -v pm2)" ]; then
+    echo "正在安装pm2,方便后续集成并发功能"
+    npm install pm2@latest -g
+  fi
+  cd "${PanelDir}" || exit
+  if type pm2 >/dev/null 2>&1; then
+    pm2 start ecosystem.config.js
+  else
+    nohup node server.js >/dev/null 2>&1 &
+  fi
+  if [ $? -ne 0 ]; then
+    echo -e "开启失败，请截图并复制错误代码并提交Issues！\n"
+  else
+    echo -e "打开浏览器，地址为你的容器地址:5678\n"
+  fi
+}
+
+## 关闭面板
+function PanelOff() {
+  [ -d "${PanelDir}" ] && cd "${PanelDir}" || exit
+  pm2 delete server
+  pm2 flush
+}
+
+## 面板状态
+function PanelInfo() {
+  [ -d "${PanelDir}" ] && cd "${PanelDir}" || exit
+  pm2 status ecosystem.config.js
 }
 
 ## 重置密码
@@ -267,6 +338,12 @@ case $# in
       Run_HangUp
     elif [[ $1 == resetpwd ]]; then
       Reset_Pwd
+    elif [[ $1 == panelinfo ]]; then
+      PanelInfo
+    elif [[ $1 == panelon ]]; then
+      PanelOn
+    elif [[ $1 == paneloff ]]; then
+      PanelOff
     else
       Run_Normal $1
     fi
